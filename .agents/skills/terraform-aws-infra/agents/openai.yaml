@@ -1,0 +1,4 @@
+interface:
+  display_name: "Terraform AWS Infra"
+  short_description: "Generate and review Terraform AWS infrastructure"
+  default_prompt: "Use $terraform-aws-infra to generate or review Terraform for this AWS infrastructure repo."

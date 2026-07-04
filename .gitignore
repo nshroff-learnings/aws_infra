@@ -1,0 +1,37 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.plan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl.bak
+
+# Secrets and local inputs
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+!variables/**/*.tfvars
+!variables/**/*.tfvars.json
+*.secret.tfvars
+*.secret.tfvars.json
+*.local.tfvars
+*.local.tfvars.json
+!.tfvars.example
+!.auto.tfvars.example
+.env
+.env.*
+*.pem
+*.key
+
+# Editor and OS
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/

@@ -1,0 +1,401 @@
+name: Terraform Infrastructure
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - "variables/**"
+      - ".github/workflows/terraform-infra.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "infra/**"
+      - "variables/**"
+      - ".github/workflows/terraform-infra.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        required: true
+        default: dev
+        options:
+          - dev
+          - qa
+      action:
+        description: "Run plan only or plan plus apply"
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - apply
+      layers:
+        description: "Layer to run"
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - networking
+          - iam
+          - config
+          - compute
+          - bootstrap
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  TF_IN_AUTOMATION: "true"
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_STATE_REGION: ${{ vars.TF_STATE_REGION || vars.AWS_REGION || 'us-east-1' }}
+  TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+
+concurrency:
+  group: terraform-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  networking_plan:
+    name: Networking Plan
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.layers == 'all' || inputs.layers == 'networking' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Validate inputs
+        run: |
+          test -n "$AWS_ROLE_ARN" || { echo "Missing AWS_ROLE_ARN"; exit 1; }
+          test -n "$TF_STATE_BUCKET" || { echo "Missing TF_STATE_BUCKET"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+      - name: Terraform init
+        run: terraform -chdir=infra/networking init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+      - name: Select or create workspace
+        run: terraform -chdir=infra/networking workspace select "${TARGET_ENV}" || terraform -chdir=infra/networking workspace new "${TARGET_ENV}"
+      - name: Terraform validate
+        run: terraform -chdir=infra/networking validate
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/networking
+          framework: terraform
+          quiet: true
+      - name: Terraform plan
+        run: |
+          terraform -chdir=infra/networking plan -input=false -no-color -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/networking.tfvars
+          terraform -chdir=infra/networking show -no-color tfplan > plan-networking.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ env.TARGET_ENV }}-networking
+          path: infra/networking/plan-networking.txt
+          retention-days: 5
+
+  networking_apply:
+    name: Networking Apply
+    runs-on: ubuntu-latest
+    needs: networking_plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && (inputs.layers == 'all' || inputs.layers == 'networking') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform apply
+        run: |
+          terraform -chdir=infra/networking init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          terraform -chdir=infra/networking workspace select "${TARGET_ENV}" || terraform -chdir=infra/networking workspace new "${TARGET_ENV}"
+          terraform -chdir=infra/networking plan -input=false -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/networking.tfvars
+          terraform -chdir=infra/networking apply -input=false -auto-approve tfplan
+
+  iam_plan:
+    name: IAM Plan
+    runs-on: ubuntu-latest
+    needs: networking_apply
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.layers == 'all' || inputs.layers == 'iam') && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.networking_apply.result == 'success') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Validate inputs
+        run: |
+          test -n "$AWS_ROLE_ARN" || { echo "Missing AWS_ROLE_ARN"; exit 1; }
+          test -n "$TF_STATE_BUCKET" || { echo "Missing TF_STATE_BUCKET"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+      - name: Terraform init
+        run: terraform -chdir=infra/iam init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+      - name: Select or create workspace
+        run: terraform -chdir=infra/iam workspace select "${TARGET_ENV}" || terraform -chdir=infra/iam workspace new "${TARGET_ENV}"
+      - name: Terraform validate
+        run: terraform -chdir=infra/iam validate
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/iam
+          framework: terraform
+          quiet: true
+      - name: Terraform plan
+        run: |
+          terraform -chdir=infra/iam plan -input=false -no-color -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/iam.tfvars
+          terraform -chdir=infra/iam show -no-color tfplan > plan-iam.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ env.TARGET_ENV }}-iam
+          path: infra/iam/plan-iam.txt
+          retention-days: 5
+
+  iam_apply:
+    name: IAM Apply
+    runs-on: ubuntu-latest
+    needs: iam_plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && (inputs.layers == 'all' || inputs.layers == 'iam') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform apply
+        run: |
+          terraform -chdir=infra/iam init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          terraform -chdir=infra/iam workspace select "${TARGET_ENV}" || terraform -chdir=infra/iam workspace new "${TARGET_ENV}"
+          terraform -chdir=infra/iam plan -input=false -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/iam.tfvars
+          terraform -chdir=infra/iam apply -input=false -auto-approve tfplan
+
+  config_plan:
+    name: Config Plan
+    runs-on: ubuntu-latest
+    needs: iam_apply
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.layers == 'all' || inputs.layers == 'config') && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.iam_apply.result == 'success') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Validate inputs
+        run: |
+          test -n "$AWS_ROLE_ARN" || { echo "Missing AWS_ROLE_ARN"; exit 1; }
+          test -n "$TF_STATE_BUCKET" || { echo "Missing TF_STATE_BUCKET"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+      - name: Terraform init
+        run: terraform -chdir=infra/config init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+      - name: Select or create workspace
+        run: terraform -chdir=infra/config workspace select "${TARGET_ENV}" || terraform -chdir=infra/config workspace new "${TARGET_ENV}"
+      - name: Terraform validate
+        run: terraform -chdir=infra/config validate
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/config
+          framework: terraform
+          quiet: true
+      - name: Terraform plan
+        run: |
+          terraform -chdir=infra/config plan -input=false -no-color -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/config.tfvars
+          terraform -chdir=infra/config show -no-color tfplan > plan-config.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ env.TARGET_ENV }}-config
+          path: infra/config/plan-config.txt
+          retention-days: 5
+
+  config_apply:
+    name: Config Apply
+    runs-on: ubuntu-latest
+    needs: config_plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && (inputs.layers == 'all' || inputs.layers == 'config') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform apply
+        run: |
+          terraform -chdir=infra/config init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          terraform -chdir=infra/config workspace select "${TARGET_ENV}" || terraform -chdir=infra/config workspace new "${TARGET_ENV}"
+          terraform -chdir=infra/config plan -input=false -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/config.tfvars
+          terraform -chdir=infra/config apply -input=false -auto-approve tfplan
+
+  compute_plan:
+    name: Compute Plan
+    runs-on: ubuntu-latest
+    needs: config_apply
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.layers == 'all' || inputs.layers == 'compute') && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.config_apply.result == 'success') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Validate inputs
+        run: |
+          test -n "$AWS_ROLE_ARN" || { echo "Missing AWS_ROLE_ARN"; exit 1; }
+          test -n "$TF_STATE_BUCKET" || { echo "Missing TF_STATE_BUCKET"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+      - name: Terraform init
+        run: terraform -chdir=infra/compute init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+      - name: Select or create workspace
+        run: terraform -chdir=infra/compute workspace select "${TARGET_ENV}" || terraform -chdir=infra/compute workspace new "${TARGET_ENV}"
+      - name: Terraform validate
+        run: terraform -chdir=infra/compute validate
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/compute
+          framework: terraform
+          quiet: true
+      - name: Terraform plan
+        run: |
+          terraform -chdir=infra/compute plan -input=false -no-color -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/eks.tfvars
+          terraform -chdir=infra/compute show -no-color tfplan > plan-compute.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ env.TARGET_ENV }}-compute
+          path: infra/compute/plan-compute.txt
+          retention-days: 5
+
+  compute_apply:
+    name: Compute Apply
+    runs-on: ubuntu-latest
+    needs: compute_plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && (inputs.layers == 'all' || inputs.layers == 'compute') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform apply
+        run: |
+          terraform -chdir=infra/compute init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          terraform -chdir=infra/compute workspace select "${TARGET_ENV}" || terraform -chdir=infra/compute workspace new "${TARGET_ENV}"
+          terraform -chdir=infra/compute plan -input=false -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/eks.tfvars
+          terraform -chdir=infra/compute apply -input=false -auto-approve tfplan
+
+  bootstrap_plan:
+    name: Bootstrap Plan
+    runs-on: ubuntu-latest
+    needs: compute_apply
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || inputs.layers == 'all' || inputs.layers == 'bootstrap') && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.compute_apply.result == 'success') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: Validate inputs
+        run: |
+          test -n "$AWS_ROLE_ARN" || { echo "Missing AWS_ROLE_ARN"; exit 1; }
+          test -n "$TF_STATE_BUCKET" || { echo "Missing TF_STATE_BUCKET"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+      - name: Terraform init
+        run: terraform -chdir=infra/bootstrap init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+      - name: Select or create workspace
+        run: terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}" || terraform -chdir=infra/bootstrap workspace new "${TARGET_ENV}"
+      - name: Terraform validate
+        run: terraform -chdir=infra/bootstrap validate
+      - name: Checkov scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infra/bootstrap
+          framework: terraform
+          quiet: true
+      - name: Terraform plan
+        run: |
+          terraform -chdir=infra/bootstrap plan -input=false -no-color -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/bootstrap.tfvars
+          terraform -chdir=infra/bootstrap show -no-color tfplan > plan-bootstrap.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ env.TARGET_ENV }}-bootstrap
+          path: infra/bootstrap/plan-bootstrap.txt
+          retention-days: 5
+
+  bootstrap_apply:
+    name: Bootstrap Apply
+    runs-on: ubuntu-latest
+    needs: bootstrap_plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'apply' && (inputs.layers == 'all' || inputs.layers == 'bootstrap') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform apply
+        run: |
+          terraform -chdir=infra/bootstrap init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}" || terraform -chdir=infra/bootstrap workspace new "${TARGET_ENV}"
+          terraform -chdir=infra/bootstrap plan -input=false -out=tfplan \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/bootstrap.tfvars
+          terraform -chdir=infra/bootstrap apply -input=false -auto-approve tfplan
