@@ -12,6 +12,7 @@ module "vpc" {
 }
 
 resource "aws_network_acl" "this" {
+  #checkov:skip=CKV2_AWS_1:Subnet associations are resolved from module output IDs; enforce non-empty associations with a Terraform precondition.
   for_each = local.network_acls
 
   vpc_id     = module.vpc.vpc_id
@@ -20,6 +21,13 @@ resource "aws_network_acl" "this" {
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-${each.key}-nacl"
   })
+
+  lifecycle {
+    precondition {
+      condition     = length(each.value.subnet_ids) > 0
+      error_message = "Each network ACL must resolve at least one subnet from subnet_keys."
+    }
+  }
 }
 
 resource "aws_network_acl_rule" "ingress" {

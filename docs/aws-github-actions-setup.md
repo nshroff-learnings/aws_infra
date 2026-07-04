@@ -65,7 +65,7 @@ Set these values for your repository and AWS account.
 
 ```powershell
 $env:AWS_REGION = "us-east-1"
-$env:GITHUB_OWNER = "YOUR_GITHUB_OWNER_OR_ORG"
+$env:GITHUB_OWNER = "nshroff-learnings"
 $env:GITHUB_REPO = "aws_infra"
 $env:ROLE_NAME = "aws-infra-github-actions"
 $env:POLICY_NAME = "aws-infra-github-actions-terraform"
