@@ -21,6 +21,7 @@ module "ecr_repositories" {
 }
 
 resource "aws_secretsmanager_secret" "this" {
+  #checkov:skip=CKV2_AWS_57:This module creates secret metadata only; secret values and rotation Lambdas are managed by a separate operational workflow.
   for_each = var.secrets
 
   name                    = each.value.name

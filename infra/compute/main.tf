@@ -1,4 +1,29 @@
+resource "aws_kms_key" "eks" {
+  for_each = {
+    for cluster_key, cluster in var.eks_clusters : cluster_key => cluster
+    if cluster.kms_key_arn == null
+  }
+
+  description             = "KMS key for EKS secrets encryption for ${each.value.name}"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  tags = merge(local.tags, each.value.tags, {
+    Name = "${each.value.name}-eks-secrets"
+  })
+}
+
+resource "aws_kms_alias" "eks" {
+  for_each = aws_kms_key.eks
+
+  name          = "alias/${var.project_name}-${var.environment}-${each.key}-eks-secrets"
+  target_key_id = each.value.key_id
+}
+
 resource "aws_eks_cluster" "this" {
+  #checkov:skip=CKV_AWS_39:Public endpoint access is enforced disabled by Terraform precondition from typed inputs.
+  #checkov:skip=CKV_AWS_37:All EKS control plane log types are enforced by Terraform precondition from typed inputs.
+  #checkov:skip=CKV_AWS_339:Supported Kubernetes versions are enforced by variable validation because version is input-driven.
   for_each = var.eks_clusters
 
   name     = each.value.name
@@ -16,7 +41,7 @@ resource "aws_eks_cluster" "this" {
   enabled_cluster_log_types = each.value.enabled_cluster_log_types
 
   dynamic "encryption_config" {
-    for_each = each.value.kms_key_arn == null ? [] : [each.value.kms_key_arn]
+    for_each = [try(aws_kms_key.eks[each.key].arn, each.value.kms_key_arn)]
 
     content {
       provider {
@@ -32,6 +57,21 @@ resource "aws_eks_cluster" "this" {
   }
 
   tags = merge(local.tags, each.value.tags)
+
+  lifecycle {
+    precondition {
+      condition     = each.value.endpoint_public_access == false
+      error_message = "EKS public endpoint access must be disabled."
+    }
+
+    precondition {
+      condition = length(setsubtract(
+        toset(["api", "audit", "authenticator", "controllerManager", "scheduler"]),
+        toset(each.value.enabled_cluster_log_types)
+      )) == 0
+      error_message = "EKS control plane logging must include api, audit, authenticator, controllerManager, and scheduler."
+    }
+  }
 }
 
 resource "aws_eks_node_group" "this" {

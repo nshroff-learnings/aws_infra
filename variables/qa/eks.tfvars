@@ -2,7 +2,7 @@ eks_clusters = {
   primary = {
     name               = "aws-infra-qa-primary"
     cluster_role_arn   = "REPLACE_WITH_INFRA_IAM_OUTPUT_EKS_CLUSTER_ROLE_ARN"
-    kubernetes_version = "1.29"
+    kubernetes_version = "1.34"
     subnet_ids = [
       "REPLACE_WITH_INFRA_NETWORKING_OUTPUT_PRIVATE_SUBNET_ID_A",
       "REPLACE_WITH_INFRA_NETWORKING_OUTPUT_PRIVATE_SUBNET_ID_B"
