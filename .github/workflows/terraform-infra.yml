@@ -24,13 +24,14 @@ on:
           - dev
           - qa
       action:
-        description: "Run plan only or plan plus apply"
+        description: "Run plan, plan plus apply, or destroy"
         type: choice
         required: true
         default: plan
         options:
           - plan
           - apply
+          - destroy
       layers:
         description: "Layer to run"
         type: choice
@@ -85,7 +86,12 @@ jobs:
       - name: Terraform init
         run: terraform -chdir=infra/networking init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
       - name: Select or create workspace
-        run: terraform -chdir=infra/networking workspace select "${TARGET_ENV}" || terraform -chdir=infra/networking workspace new "${TARGET_ENV}"
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/networking workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/networking workspace select "${TARGET_ENV}" || terraform -chdir=infra/networking workspace new "${TARGET_ENV}"
+          fi
       - name: Terraform validate
         run: terraform -chdir=infra/networking validate
       - name: Checkov scan
@@ -96,9 +102,15 @@ jobs:
           quiet: true
       - name: Terraform plan
         run: |
-          terraform -chdir=infra/networking plan -input=false -no-color -out=tfplan \
-            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
-            -var-file=../../variables/${TARGET_ENV}/networking.tfvars
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/networking plan -destroy -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/networking.tfvars
+          else
+            terraform -chdir=infra/networking plan -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/networking.tfvars
+          fi
           terraform -chdir=infra/networking show -no-color tfplan > plan-networking.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -124,7 +136,11 @@ jobs:
       - name: Terraform apply
         run: |
           terraform -chdir=infra/networking init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
-          terraform -chdir=infra/networking workspace select "${TARGET_ENV}" || terraform -chdir=infra/networking workspace new "${TARGET_ENV}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/networking workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/networking workspace select "${TARGET_ENV}" || terraform -chdir=infra/networking workspace new "${TARGET_ENV}"
+          fi
           terraform -chdir=infra/networking plan -input=false -out=tfplan \
             -var-file=../../variables/${TARGET_ENV}/common.tfvars \
             -var-file=../../variables/${TARGET_ENV}/networking.tfvars
@@ -153,7 +169,12 @@ jobs:
       - name: Terraform init
         run: terraform -chdir=infra/iam init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
       - name: Select or create workspace
-        run: terraform -chdir=infra/iam workspace select "${TARGET_ENV}" || terraform -chdir=infra/iam workspace new "${TARGET_ENV}"
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/iam workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/iam workspace select "${TARGET_ENV}" || terraform -chdir=infra/iam workspace new "${TARGET_ENV}"
+          fi
       - name: Terraform validate
         run: terraform -chdir=infra/iam validate
       - name: Checkov scan
@@ -164,9 +185,15 @@ jobs:
           quiet: true
       - name: Terraform plan
         run: |
-          terraform -chdir=infra/iam plan -input=false -no-color -out=tfplan \
-            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
-            -var-file=../../variables/${TARGET_ENV}/iam.tfvars
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/iam plan -destroy -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/iam.tfvars
+          else
+            terraform -chdir=infra/iam plan -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/iam.tfvars
+          fi
           terraform -chdir=infra/iam show -no-color tfplan > plan-iam.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -192,7 +219,11 @@ jobs:
       - name: Terraform apply
         run: |
           terraform -chdir=infra/iam init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
-          terraform -chdir=infra/iam workspace select "${TARGET_ENV}" || terraform -chdir=infra/iam workspace new "${TARGET_ENV}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/iam workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/iam workspace select "${TARGET_ENV}" || terraform -chdir=infra/iam workspace new "${TARGET_ENV}"
+          fi
           terraform -chdir=infra/iam plan -input=false -out=tfplan \
             -var-file=../../variables/${TARGET_ENV}/common.tfvars \
             -var-file=../../variables/${TARGET_ENV}/iam.tfvars
@@ -221,7 +252,12 @@ jobs:
       - name: Terraform init
         run: terraform -chdir=infra/config init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
       - name: Select or create workspace
-        run: terraform -chdir=infra/config workspace select "${TARGET_ENV}" || terraform -chdir=infra/config workspace new "${TARGET_ENV}"
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/config workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/config workspace select "${TARGET_ENV}" || terraform -chdir=infra/config workspace new "${TARGET_ENV}"
+          fi
       - name: Terraform validate
         run: terraform -chdir=infra/config validate
       - name: Checkov scan
@@ -232,9 +268,15 @@ jobs:
           quiet: true
       - name: Terraform plan
         run: |
-          terraform -chdir=infra/config plan -input=false -no-color -out=tfplan \
-            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
-            -var-file=../../variables/${TARGET_ENV}/config.tfvars
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/config plan -destroy -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/config.tfvars
+          else
+            terraform -chdir=infra/config plan -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/config.tfvars
+          fi
           terraform -chdir=infra/config show -no-color tfplan > plan-config.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -260,7 +302,11 @@ jobs:
       - name: Terraform apply
         run: |
           terraform -chdir=infra/config init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
-          terraform -chdir=infra/config workspace select "${TARGET_ENV}" || terraform -chdir=infra/config workspace new "${TARGET_ENV}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/config workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/config workspace select "${TARGET_ENV}" || terraform -chdir=infra/config workspace new "${TARGET_ENV}"
+          fi
           terraform -chdir=infra/config plan -input=false -out=tfplan \
             -var-file=../../variables/${TARGET_ENV}/common.tfvars \
             -var-file=../../variables/${TARGET_ENV}/config.tfvars
@@ -289,7 +335,12 @@ jobs:
       - name: Terraform init
         run: terraform -chdir=infra/compute init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
       - name: Select or create workspace
-        run: terraform -chdir=infra/compute workspace select "${TARGET_ENV}" || terraform -chdir=infra/compute workspace new "${TARGET_ENV}"
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/compute workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/compute workspace select "${TARGET_ENV}" || terraform -chdir=infra/compute workspace new "${TARGET_ENV}"
+          fi
       - name: Terraform validate
         run: terraform -chdir=infra/compute validate
       - name: Checkov scan
@@ -300,9 +351,15 @@ jobs:
           quiet: true
       - name: Terraform plan
         run: |
-          terraform -chdir=infra/compute plan -input=false -no-color -out=tfplan \
-            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
-            -var-file=../../variables/${TARGET_ENV}/eks.tfvars
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/compute plan -destroy -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/eks.tfvars
+          else
+            terraform -chdir=infra/compute plan -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/eks.tfvars
+          fi
           terraform -chdir=infra/compute show -no-color tfplan > plan-compute.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -328,7 +385,11 @@ jobs:
       - name: Terraform apply
         run: |
           terraform -chdir=infra/compute init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
-          terraform -chdir=infra/compute workspace select "${TARGET_ENV}" || terraform -chdir=infra/compute workspace new "${TARGET_ENV}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/compute workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/compute workspace select "${TARGET_ENV}" || terraform -chdir=infra/compute workspace new "${TARGET_ENV}"
+          fi
           terraform -chdir=infra/compute plan -input=false -out=tfplan \
             -var-file=../../variables/${TARGET_ENV}/common.tfvars \
             -var-file=../../variables/${TARGET_ENV}/eks.tfvars
@@ -357,7 +418,12 @@ jobs:
       - name: Terraform init
         run: terraform -chdir=infra/bootstrap init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
       - name: Select or create workspace
-        run: terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}" || terraform -chdir=infra/bootstrap workspace new "${TARGET_ENV}"
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}" || terraform -chdir=infra/bootstrap workspace new "${TARGET_ENV}"
+          fi
       - name: Terraform validate
         run: terraform -chdir=infra/bootstrap validate
       - name: Checkov scan
@@ -368,9 +434,15 @@ jobs:
           quiet: true
       - name: Terraform plan
         run: |
-          terraform -chdir=infra/bootstrap plan -input=false -no-color -out=tfplan \
-            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
-            -var-file=../../variables/${TARGET_ENV}/bootstrap.tfvars
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/bootstrap plan -destroy -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/bootstrap.tfvars
+          else
+            terraform -chdir=infra/bootstrap plan -input=false -no-color -out=tfplan \
+              -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+              -var-file=../../variables/${TARGET_ENV}/bootstrap.tfvars
+          fi
           terraform -chdir=infra/bootstrap show -no-color tfplan > plan-bootstrap.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -396,8 +468,158 @@ jobs:
       - name: Terraform apply
         run: |
           terraform -chdir=infra/bootstrap init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
-          terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}" || terraform -chdir=infra/bootstrap workspace new "${TARGET_ENV}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}" || terraform -chdir=infra/bootstrap workspace new "${TARGET_ENV}"
+          fi
           terraform -chdir=infra/bootstrap plan -input=false -out=tfplan \
             -var-file=../../variables/${TARGET_ENV}/common.tfvars \
             -var-file=../../variables/${TARGET_ENV}/bootstrap.tfvars
           terraform -chdir=infra/bootstrap apply -input=false -auto-approve tfplan
+  bootstrap_destroy:
+    name: Bootstrap Destroy
+    runs-on: ubuntu-latest
+    needs: bootstrap_plan
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'bootstrap') && needs.bootstrap_plan.result == 'success' }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform destroy
+        run: |
+          terraform -chdir=infra/bootstrap init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/bootstrap workspace select "${TARGET_ENV}" || terraform -chdir=infra/bootstrap workspace new "${TARGET_ENV}"
+          fi
+          terraform -chdir=infra/bootstrap destroy -input=false -auto-approve \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/bootstrap.tfvars
+
+  compute_destroy:
+    name: Compute Destroy
+    runs-on: ubuntu-latest
+    needs:
+      - compute_plan
+      - bootstrap_destroy
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'compute') && needs.compute_plan.result == 'success' && (inputs.layers != 'all' || needs.bootstrap_destroy.result == 'success') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform destroy
+        run: |
+          terraform -chdir=infra/compute init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/compute workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/compute workspace select "${TARGET_ENV}" || terraform -chdir=infra/compute workspace new "${TARGET_ENV}"
+          fi
+          terraform -chdir=infra/compute destroy -input=false -auto-approve \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/eks.tfvars
+
+  config_destroy:
+    name: Config Destroy
+    runs-on: ubuntu-latest
+    needs:
+      - config_plan
+      - compute_destroy
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'config') && needs.config_plan.result == 'success' && (inputs.layers != 'all' || needs.compute_destroy.result == 'success') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform destroy
+        run: |
+          terraform -chdir=infra/config init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/config workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/config workspace select "${TARGET_ENV}" || terraform -chdir=infra/config workspace new "${TARGET_ENV}"
+          fi
+          terraform -chdir=infra/config destroy -input=false -auto-approve \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/config.tfvars
+
+  iam_destroy:
+    name: IAM Destroy
+    runs-on: ubuntu-latest
+    needs:
+      - iam_plan
+      - config_destroy
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'iam') && needs.iam_plan.result == 'success' && (inputs.layers != 'all' || needs.config_destroy.result == 'success') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform destroy
+        run: |
+          terraform -chdir=infra/iam init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/iam workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/iam workspace select "${TARGET_ENV}" || terraform -chdir=infra/iam workspace new "${TARGET_ENV}"
+          fi
+          terraform -chdir=infra/iam destroy -input=false -auto-approve \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/iam.tfvars
+
+  networking_destroy:
+    name: Networking Destroy
+    runs-on: ubuntu-latest
+    needs:
+      - networking_plan
+      - iam_destroy
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'networking') && needs.networking_plan.result == 'success' && (inputs.layers != 'all' || needs.iam_destroy.result == 'success') }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Terraform destroy
+        run: |
+          terraform -chdir=infra/networking init -backend-config="bucket=${TF_STATE_BUCKET}" -backend-config="region=${TF_STATE_REGION}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.action }}" = "destroy" ]; then
+            terraform -chdir=infra/networking workspace select "${TARGET_ENV}"
+          else
+            terraform -chdir=infra/networking workspace select "${TARGET_ENV}" || terraform -chdir=infra/networking workspace new "${TARGET_ENV}"
+          fi
+          terraform -chdir=infra/networking destroy -input=false -auto-approve \
+            -var-file=../../variables/${TARGET_ENV}/common.tfvars \
+            -var-file=../../variables/${TARGET_ENV}/networking.tfvars
+
+
+
+
