@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "eks" {
   for_each = {
     for cluster_key, cluster in var.eks_clusters : cluster_key => cluster
@@ -7,6 +9,35 @@ resource "aws_kms_key" "eks" {
   description             = "KMS key for EKS secrets encryption for ${each.value.name}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableRootAccountAdministration"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowEksSecretsEncryptionUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "eks.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
   tags = merge(local.tags, each.value.tags, {
     Name = "${each.value.name}-eks-secrets"
@@ -24,6 +55,7 @@ resource "aws_eks_cluster" "this" {
   #checkov:skip=CKV_AWS_39:Public endpoint access is enforced disabled by Terraform precondition from typed inputs.
   #checkov:skip=CKV_AWS_37:All EKS control plane log types are enforced by Terraform precondition from typed inputs.
   #checkov:skip=CKV_AWS_339:Supported Kubernetes versions are enforced by variable validation because version is input-driven.
+  #checkov:skip=CKV_AWS_58:Secrets encryption is always configured using either a generated KMS key or caller-supplied kms_key_arn; Checkov cannot resolve the dynamic expression.
   for_each = var.eks_clusters
 
   name     = each.value.name
