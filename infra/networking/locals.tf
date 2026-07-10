@@ -23,7 +23,7 @@ locals {
       for rule in acl.ingress_rules : length(rule.cidr_subnet_keys) > 0 ? {
         for idx, subnet_key in rule.cidr_subnet_keys : "${acl_name}-${rule.rule_no}-${subnet_key}" => merge(rule, {
           acl_name   = acl_name
-          rule_no    = rule.rule_no + idx + 1
+          rule_no    = rule.rule_no + ((idx + 1) * 10)
           cidr_block = local.subnet_cidrs_by_key[subnet_key]
         })
         } : {
@@ -39,7 +39,7 @@ locals {
       for rule in acl.egress_rules : length(rule.cidr_subnet_keys) > 0 ? {
         for idx, subnet_key in rule.cidr_subnet_keys : "${acl_name}-${rule.rule_no}-${subnet_key}" => merge(rule, {
           acl_name   = acl_name
-          rule_no    = rule.rule_no + idx + 1
+          rule_no    = rule.rule_no + ((idx + 1) * 10)
           cidr_block = local.subnet_cidrs_by_key[subnet_key]
         })
         } : {
@@ -50,4 +50,5 @@ locals {
     ]
   ])...)
 }
+
 
