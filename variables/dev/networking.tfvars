@@ -19,12 +19,12 @@ network_acls = {
     subnet_keys = ["private-01", "private-02"]
     ingress_rules = [
       {
-        rule_no    = 100
-        action     = "allow"
-        protocol   = "-1"
-        cidr_block = "10.10.0.0/16"
-        from_port  = 0
-        to_port    = 0
+        rule_no          = 100
+        action           = "allow"
+        protocol         = "-1"
+        cidr_subnet_keys = ["private-01", "private-02"]
+        from_port        = 0
+        to_port          = 0
       }
     ]
     egress_rules = [

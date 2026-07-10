@@ -71,7 +71,7 @@ network_acls = {
         rule_no    = 100
         action     = "allow"
         protocol   = "-1"
-        cidr_block = "10.10.0.0/16"
+        cidr_subnet_keys = ["private-01", "private-02"]
         from_port  = 0
         to_port    = 0
       }

@@ -79,25 +79,45 @@ variable "map_public_ip_on_launch" {
 }
 
 variable "network_acls" {
-  description = "Network ACLs keyed by logical name."
+  description = "Network ACLs keyed by logical name. Rules must use exactly one of cidr_block or cidr_subnet_keys."
   type = map(object({
     subnet_keys = list(string)
     ingress_rules = list(object({
-      rule_no    = number
-      action     = string
-      protocol   = string
-      cidr_block = string
-      from_port  = number
-      to_port    = number
+      rule_no          = number
+      action           = string
+      protocol         = string
+      cidr_block       = optional(string)
+      cidr_subnet_keys = optional(list(string), [])
+      from_port        = number
+      to_port          = number
     }))
     egress_rules = list(object({
-      rule_no    = number
-      action     = string
-      protocol   = string
-      cidr_block = string
-      from_port  = number
-      to_port    = number
+      rule_no          = number
+      action           = string
+      protocol         = string
+      cidr_block       = optional(string)
+      cidr_subnet_keys = optional(list(string), [])
+      from_port        = number
+      to_port          = number
     }))
   }))
   default = {}
+
+  validation {
+    condition = alltrue(flatten([
+      for acl in values(var.network_acls) : [
+        for rule in acl.ingress_rules : (rule.cidr_block != null) != (length(rule.cidr_subnet_keys) > 0)
+      ]
+    ]))
+    error_message = "Each network ACL ingress rule must set exactly one of cidr_block or cidr_subnet_keys."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for acl in values(var.network_acls) : [
+        for rule in acl.egress_rules : (rule.cidr_block != null) != (length(rule.cidr_subnet_keys) > 0)
+      ]
+    ]))
+    error_message = "Each network ACL egress rule must set exactly one of cidr_block or cidr_subnet_keys."
+  }
 }
