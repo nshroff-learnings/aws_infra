@@ -7,11 +7,11 @@ provider "aws" {
 }
 
 data "aws_eks_cluster" "platform" {
-  name = var.platform_cluster_name
+  name = local.platform_cluster_name
 }
 
 data "aws_eks_cluster_auth" "platform" {
-  name = var.platform_cluster_name
+  name = local.platform_cluster_name
 }
 
 provider "kubernetes" {

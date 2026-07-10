@@ -13,6 +13,27 @@ variable "aws_region" {
   type        = string
 }
 
+variable "tf_state_bucket" {
+  description = "S3 bucket containing upstream Terraform state for dependency lookups."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.tf_state_bucket)) > 0
+    error_message = "tf_state_bucket must be provided."
+  }
+}
+
+variable "tf_state_region" {
+  description = "AWS region for the Terraform state bucket."
+  type        = string
+}
+
+variable "github_actions_role_name" {
+  description = "IAM role name used by GitHub Actions for optional EKS cluster admin access entry."
+  type        = string
+  default     = "aws-infra-github-actions"
+}
+
 variable "common_tags" {
   description = "Tags shared by all components in an environment."
   type        = map(string)
@@ -26,12 +47,14 @@ variable "tags" {
 }
 
 variable "eks_clusters" {
-  description = "EKS clusters keyed by logical name."
+  description = "EKS clusters keyed by logical name. Role and subnet inputs default from networking/iam remote state when omitted."
   type = map(object({
     name                                        = string
-    cluster_role_arn                            = string
+    cluster_role_arn                            = optional(string)
+    cluster_role_key                            = optional(string, "cluster")
     kubernetes_version                          = optional(string, "1.34")
-    subnet_ids                                  = list(string)
+    subnet_ids                                  = optional(list(string))
+    subnet_keys                                 = optional(list(string), ["private-01", "private-02"])
     security_group_ids                          = optional(list(string), [])
     endpoint_private_access                     = optional(bool, true)
     endpoint_public_access                      = optional(bool, false)
@@ -41,8 +64,9 @@ variable "eks_clusters" {
     authentication_mode                         = optional(string, "API_AND_CONFIG_MAP")
     bootstrap_cluster_creator_admin_permissions = optional(bool, false)
     access_entries = optional(map(object({
-      principal_arn = string
-      type          = optional(string, "STANDARD")
+      principal_arn       = optional(string)
+      principal_role_name = optional(string)
+      type                = optional(string, "STANDARD")
       policy_associations = optional(map(object({
         policy_arn        = string
         access_scope_type = optional(string, "cluster")
@@ -52,8 +76,10 @@ variable "eks_clusters" {
     tags = optional(map(string), {})
     node_groups = map(object({
       name               = string
-      node_role_arn      = string
-      subnet_ids         = list(string)
+      node_role_arn      = optional(string)
+      node_role_key      = optional(string, "node")
+      subnet_ids         = optional(list(string))
+      subnet_keys        = optional(list(string), ["private-01", "private-02"])
       kubernetes_version = optional(string)
       ami_type           = optional(string, "AL2_x86_64")
       capacity_type      = optional(string, "ON_DEMAND")

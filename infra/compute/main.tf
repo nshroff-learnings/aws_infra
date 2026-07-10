@@ -2,7 +2,7 @@ data "aws_caller_identity" "current" {}
 
 resource "aws_kms_key" "eks" {
   for_each = {
-    for cluster_key, cluster in var.eks_clusters : cluster_key => cluster
+    for cluster_key, cluster in local.eks_clusters : cluster_key => cluster
     if cluster.kms_key_arn == null
   }
 
@@ -56,7 +56,7 @@ resource "aws_eks_cluster" "this" {
   #checkov:skip=CKV_AWS_37:All EKS control plane log types are enforced by Terraform precondition from typed inputs.
   #checkov:skip=CKV_AWS_339:Supported Kubernetes versions are enforced by variable validation because version is input-driven.
   #checkov:skip=CKV_AWS_58:Secrets encryption is always configured using either a generated KMS key or caller-supplied kms_key_arn; Checkov cannot resolve the dynamic expression.
-  for_each = var.eks_clusters
+  for_each = local.eks_clusters
 
   name     = each.value.name
   role_arn = each.value.cluster_role_arn

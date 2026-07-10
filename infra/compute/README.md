@@ -24,24 +24,38 @@ terraform -chdir=infra/compute plan `
 
 ## Dependency Requirements
 
-Before planning compute, replace placeholders in `variables/<env>/eks.tfvars` with:
+Before planning compute, the `networking` and `iam` layers must already be applied for the same Terraform workspace/environment.
+
+This module reads upstream values from Terraform remote state instead of requiring copied IDs in `variables/<env>/eks.tfvars`:
 
 - private subnet IDs from `infra/networking`
 - EKS cluster role ARN from `infra/iam`
 - EKS node role ARN from `infra/iam`
-- GitHub Actions IAM role ARN for bootstrap access, if the bootstrap layer will install Argo CD
 
-Remote state can be added later after the S3 backend/account model is finalized.
+The workflow passes remote-state settings through environment variables:
 
+```yaml
+TF_VAR_tf_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+TF_VAR_tf_state_region: ${{ vars.TF_STATE_REGION || vars.AWS_REGION || 'us-east-1' }}
+```
+
+Local runs need the same variables:
+
+```powershell
+$env:TF_VAR_tf_state_bucket = "<state-bucket>"
+$env:TF_VAR_tf_state_region = "<state-region>"
+```
+
+`eks.tfvars` can still override `cluster_role_arn`, `node_role_arn`, `subnet_ids`, or `principal_arn` explicitly, but normal environment files should omit them and use the remote-state defaults.
 ## Important Cluster Properties
 
 | Property | Purpose |
 | --- | --- |
 | `eks_clusters` | Map of clusters keyed by logical name. Add a new map item for another cluster. |
 | `name` | EKS cluster name. Keep it deterministic and environment-specific. |
-| `cluster_role_arn` | IAM role ARN assumed by the EKS control plane. |
-| `kubernetes_version` | Optional Kubernetes version. Pin intentionally and plan upgrades. |
-| `subnet_ids` | Subnets used by the EKS control plane. Prefer private subnets for private clusters. |
+| `cluster_role_arn` | IAM role ARN assumed by the EKS control plane. Defaults from IAM remote state when omitted. |
+| `kubernetes_version` | Optional Kubernetes version. Defaults to a currently supported EKS version; pin intentionally and plan upgrades. |
+| `subnet_ids` | Subnets used by the EKS control plane. Defaults from networking remote state when omitted. |
 | `endpoint_private_access` | Enables private API endpoint access inside the VPC. |
 | `endpoint_public_access` | Enables public API endpoint access. Defaults should remain false for private clusters. |
 | `public_access_cidrs` | CIDRs allowed to reach public endpoint when public endpoint is enabled. |
@@ -56,7 +70,7 @@ Remote state can be added later after the S3 backend/account model is finalized.
 | Property | Purpose |
 | --- | --- |
 | `node_groups` | Map of managed node groups under each cluster. |
-| `node_role_arn` | IAM role ARN assumed by worker nodes. |
+| `node_role_arn` | IAM role ARN assumed by worker nodes. Defaults from IAM remote state when omitted. |
 | `subnet_ids` | Subnets used by nodes. Prefer private subnets. |
 | `instance_types` | EC2 instance types for the node group. |
 | `capacity_type` | `ON_DEMAND` or `SPOT`. Use spot only for interruption-tolerant workloads. |

@@ -10,6 +10,8 @@ locals {
     }
   )
 
+  platform_cluster_name = var.platform_cluster_name != null ? var.platform_cluster_name : data.terraform_remote_state.compute.outputs.eks_clusters[var.platform_cluster_key].name
+
   argocd_values = {
     configs = {
       cm = {

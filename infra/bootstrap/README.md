@@ -15,7 +15,6 @@ The root app points to `argocd/apps` in the platform repo. Those child applicati
 ## Required Inputs
 
 ```hcl
-platform_cluster_name  = "aws-infra-dev-primary"
 platform_repo_url      = "https://github.com/<org>/<platform-repo>.git"
 platform_repo_revision = "main"
 platform_root_app_path = "argocd/apps"

@@ -26,7 +26,29 @@ variable "tags" {
 }
 
 variable "platform_cluster_name" {
-  description = "Name of the platform EKS cluster where Argo CD is bootstrapped."
+  description = "Optional explicit platform EKS cluster name where Argo CD is bootstrapped. Defaults from compute remote state."
+  type        = string
+  default     = null
+}
+
+variable "platform_cluster_key" {
+  description = "Compute layer EKS cluster key used to look up the platform cluster name from remote state."
+  type        = string
+  default     = "primary"
+}
+
+variable "tf_state_bucket" {
+  description = "S3 bucket containing upstream Terraform state for dependency lookups."
+  type        = string
+
+  validation {
+    condition     = length(trimspace(var.tf_state_bucket)) > 0
+    error_message = "tf_state_bucket must be provided."
+  }
+}
+
+variable "tf_state_region" {
+  description = "AWS region for the Terraform state bucket."
   type        = string
 }
 

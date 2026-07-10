@@ -55,6 +55,8 @@ env:
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
   TF_STATE_REGION: ${{ vars.TF_STATE_REGION || vars.AWS_REGION || 'us-east-1' }}
   TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+  TF_VAR_tf_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+  TF_VAR_tf_state_region: ${{ vars.TF_STATE_REGION || vars.AWS_REGION || 'us-east-1' }}
 
 concurrency:
   group: terraform-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}

@@ -1,5 +1,3 @@
-platform_cluster_name = "aws-infra-dev-primary"
-
 platform_repo_url      = "https://github.com/YOUR_ORG/YOUR_PLATFORM_REPO.git"
 platform_repo_revision = "main"
 platform_root_app_path = "argocd/apps"
