@@ -28,13 +28,14 @@ data "aws_iam_roles" "eks_access" {
       for cluster_key, cluster in var.eks_clusters : [
         for entry_key, entry in cluster.access_entries : {
           key   = "${cluster_key}-${entry_key}"
-          regex = entry.principal_role_name_regex
+          regex = try(entry.principal_role_name_regex, null)
         }
-        if entry.principal_role_name_regex != null
+        if try(entry.principal_role_name_regex, null) != null
       ]
     ]) : item.key => item.regex
   }
 
   name_regex = each.value
 }
+
 
