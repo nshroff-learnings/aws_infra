@@ -1,0 +1,106 @@
+name: Terraform Layer Operation
+description: Run Terraform plan, apply, or destroy for one infrastructure layer.
+
+inputs:
+  layer:
+    description: "Terraform layer directory under infra."
+    required: true
+  var_file:
+    description: "Layer tfvars file under variables/<environment>."
+    required: true
+  target_environment:
+    description: "Target Terraform workspace/environment."
+    required: true
+  operation:
+    description: "Terraform operation to run: plan, apply, or destroy."
+    required: true
+  aws_region:
+    description: "AWS region used by the workflow."
+    required: true
+  aws_role_arn:
+    description: "AWS role ARN assumed by GitHub Actions."
+    required: true
+  tf_state_bucket:
+    description: "S3 bucket containing Terraform state."
+    required: true
+  tf_state_region:
+    description: "Region for the Terraform state bucket."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        test -n "${{ inputs.aws_role_arn }}" || { echo "Missing aws_role_arn"; exit 1; }
+        test -n "${{ inputs.tf_state_bucket }}" || { echo "Missing tf_state_bucket"; exit 1; }
+        case "${{ inputs.operation }}" in
+          plan|apply|destroy) ;;
+          *) echo "Unsupported operation: ${{ inputs.operation }}"; exit 1 ;;
+        esac
+
+    - uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        aws-region: ${{ inputs.aws_region }}
+
+    - name: Terraform fmt
+      if: ${{ inputs.operation != 'destroy' }}
+      shell: bash
+      run: terraform fmt -check -recursive
+
+    - name: Terraform init
+      shell: bash
+      run: terraform -chdir=infra/${{ inputs.layer }} init -backend-config="bucket=${{ inputs.tf_state_bucket }}" -backend-config="region=${{ inputs.tf_state_region }}"
+
+    - name: Select or create workspace
+      if: ${{ inputs.operation != 'destroy' }}
+      shell: bash
+      run: terraform -chdir=infra/${{ inputs.layer }} workspace select "${{ inputs.target_environment }}" || terraform -chdir=infra/${{ inputs.layer }} workspace new "${{ inputs.target_environment }}"
+
+    - name: Select existing workspace
+      if: ${{ inputs.operation == 'destroy' }}
+      shell: bash
+      run: terraform -chdir=infra/${{ inputs.layer }} workspace select "${{ inputs.target_environment }}"
+
+    - name: Terraform validate
+      shell: bash
+      run: terraform -chdir=infra/${{ inputs.layer }} validate
+
+    - name: Checkov scan
+      if: ${{ inputs.operation != 'destroy' }}
+      uses: bridgecrewio/checkov-action@v12
+      with:
+        directory: infra/${{ inputs.layer }}
+        framework: terraform
+        quiet: true
+
+    - name: Terraform operation
+      shell: bash
+      env:
+        TF_VAR_tf_state_bucket: ${{ inputs.tf_state_bucket }}
+        TF_VAR_tf_state_region: ${{ inputs.tf_state_region }}
+      run: |
+        plan_args=(
+          -input=false
+          -out=tfplan
+          -var-file=../../variables/${{ inputs.target_environment }}/common.tfvars
+          -var-file=../../variables/${{ inputs.target_environment }}/${{ inputs.var_file }}
+        )
+
+        case "${{ inputs.operation }}" in
+          plan)
+            terraform -chdir=infra/${{ inputs.layer }} plan -no-color "${plan_args[@]}"
+            terraform -chdir=infra/${{ inputs.layer }} show -no-color tfplan > plan-${{ inputs.layer }}.txt
+            ;;
+          apply)
+            terraform -chdir=infra/${{ inputs.layer }} plan "${plan_args[@]}"
+            terraform -chdir=infra/${{ inputs.layer }} apply -input=false -auto-approve tfplan
+            ;;
+          destroy)
+            terraform -chdir=infra/${{ inputs.layer }} plan -destroy -no-color "${plan_args[@]}"
+            terraform -chdir=infra/${{ inputs.layer }} show -no-color tfplan > destroy-plan-${{ inputs.layer }}.txt
+            terraform -chdir=infra/${{ inputs.layer }} apply -input=false -auto-approve tfplan
+            ;;
+        esac

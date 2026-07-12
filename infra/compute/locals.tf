@@ -13,7 +13,9 @@ locals {
       access_entries = {
         for entry_key, entry in cluster.access_entries : entry_key => merge(entry, {
           principal_arn = entry.principal_arn != null ? entry.principal_arn : (
-            entry.principal_role_name != null ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${entry.principal_role_name}" : data.aws_iam_role.github_actions.arn
+            entry.principal_role_name != null ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${entry.principal_role_name}" : (
+              entry.principal_role_name_regex != null ? one(data.aws_iam_roles.eks_access["${cluster_key}-${entry_key}"].arns) : data.aws_iam_role.github_actions.arn
+            )
           )
         })
       }
@@ -56,3 +58,4 @@ locals {
     }
   ]...)
 }
+

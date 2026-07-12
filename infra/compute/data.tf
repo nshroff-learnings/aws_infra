@@ -21,3 +21,20 @@ data "terraform_remote_state" "iam" {
 data "aws_iam_role" "github_actions" {
   name = var.github_actions_role_name
 }
+
+data "aws_iam_roles" "eks_access" {
+  for_each = {
+    for item in flatten([
+      for cluster_key, cluster in var.eks_clusters : [
+        for entry_key, entry in cluster.access_entries : {
+          key   = "${cluster_key}-${entry_key}"
+          regex = entry.principal_role_name_regex
+        }
+        if entry.principal_role_name_regex != null
+      ]
+    ]) : item.key => item.regex
+  }
+
+  name_regex = each.value
+}
+

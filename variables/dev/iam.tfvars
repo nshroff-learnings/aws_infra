@@ -23,3 +23,11 @@ eks_roles = {
 }
 
 custom_policies = {}
+
+eks_admin_access_roles = {
+  admins = {
+    role_name  = "aws-infra-dev-eks-admin"
+    group_name = "AWS-Admins"
+  }
+}
+

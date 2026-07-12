@@ -81,7 +81,7 @@ variable "eks_clusters" {
       subnet_ids         = optional(list(string))
       subnet_keys        = optional(list(string), ["private-01", "private-02"])
       kubernetes_version = optional(string)
-      ami_type           = optional(string, "AL2_x86_64")
+      ami_type           = optional(string, "AL2023_x86_64_STANDARD")
       capacity_type      = optional(string, "ON_DEMAND")
       disk_size          = optional(number, 50)
       instance_types     = optional(list(string), ["t3.medium"])
@@ -107,12 +107,6 @@ variable "eks_clusters" {
     error_message = "Each EKS cluster must enable at least one endpoint access mode."
   }
 
-  validation {
-    condition = alltrue([
-      for cluster in values(var.eks_clusters) : cluster.endpoint_public_access == false
-    ])
-    error_message = "EKS public endpoint access must be disabled."
-  }
 
   validation {
     condition = alltrue([
@@ -131,3 +125,5 @@ variable "eks_clusters" {
     error_message = "Each EKS cluster must use a Kubernetes version in current EKS standard support: 1.33, 1.34, 1.35, or 1.36."
   }
 }
+
+

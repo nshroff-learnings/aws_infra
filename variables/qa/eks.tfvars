@@ -22,6 +22,7 @@ eks_clusters = {
       system = {
         name            = "system"
         instance_types  = ["t3.medium"]
+        ami_type        = "AL2023_x86_64_STANDARD"
         desired_size    = 2
         min_size        = 2
         max_size        = 4
@@ -33,3 +34,4 @@ eks_clusters = {
     }
   }
 }
+

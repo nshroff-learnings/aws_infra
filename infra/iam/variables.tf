@@ -78,3 +78,15 @@ variable "custom_policies" {
     error_message = "Each custom policy_json must be valid JSON."
   }
 }
+
+variable "eks_admin_access_roles" {
+  description = "IAM roles that existing IAM groups can assume for EKS cluster access. Groups are looked up, not created."
+  type = map(object({
+    role_name            = string
+    group_name           = string
+    description          = optional(string, "IAM role assumed by an existing IAM group for EKS access.")
+    max_session_duration = optional(number, 3600)
+    tags                 = optional(map(string), {})
+  }))
+  default = {}
+}

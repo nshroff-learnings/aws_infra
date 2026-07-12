@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 module "iam_roles" {
   for_each = var.iam_roles
 
@@ -65,4 +67,53 @@ resource "aws_iam_policy" "custom" {
   path        = each.value.path
 
   tags = merge(local.tags, each.value.tags)
+}
+
+data "aws_iam_group" "eks_admin_access" {
+  for_each = var.eks_admin_access_roles
+
+  group_name = each.value.group_name
+}
+
+data "aws_iam_policy_document" "eks_admin_access_assume_role" {
+  for_each = var.eks_admin_access_roles
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+}
+
+resource "aws_iam_role" "eks_admin_access" {
+  for_each = var.eks_admin_access_roles
+
+  name                 = each.value.role_name
+  description          = each.value.description
+  assume_role_policy   = data.aws_iam_policy_document.eks_admin_access_assume_role[each.key].json
+  max_session_duration = each.value.max_session_duration
+
+  tags = merge(local.tags, each.value.tags)
+}
+
+data "aws_iam_policy_document" "eks_admin_access_group_assume_role" {
+  for_each = var.eks_admin_access_roles
+
+  statement {
+    effect    = "Allow"
+    actions   = ["sts:AssumeRole"]
+    resources = [aws_iam_role.eks_admin_access[each.key].arn]
+  }
+}
+
+resource "aws_iam_group_policy" "eks_admin_access_assume_role" {
+  for_each = var.eks_admin_access_roles
+
+  name   = "${each.value.role_name}-assume-role"
+  group  = data.aws_iam_group.eks_admin_access[each.key].group_name
+  policy = data.aws_iam_policy_document.eks_admin_access_group_assume_role[each.key].json
 }

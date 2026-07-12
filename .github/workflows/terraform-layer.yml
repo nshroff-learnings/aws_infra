@@ -1,0 +1,104 @@
+name: Terraform Layer
+
+on:
+  workflow_call:
+    inputs:
+      layer:
+        description: "Terraform layer directory under infra"
+        type: string
+        required: true
+      var_file:
+        description: "Layer tfvars file under variables/<environment>"
+        type: string
+        required: true
+      target_environment:
+        description: "Target Terraform workspace/environment"
+        type: string
+        required: true
+      operation:
+        description: "Terraform operation to run"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  TF_STATE_REGION: ${{ vars.TF_STATE_REGION || vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  plan:
+    name: ${{ inputs.layer }} Plan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.operation == 'plan' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: ./.github/actions/terraform-layer
+        with:
+          layer: ${{ inputs.layer }}
+          var_file: ${{ inputs.var_file }}
+          target_environment: ${{ inputs.target_environment }}
+          operation: plan
+          aws_region: ${{ env.AWS_REGION }}
+          aws_role_arn: ${{ env.AWS_ROLE_ARN }}
+          tf_state_bucket: ${{ env.TF_STATE_BUCKET }}
+          tf_state_region: ${{ env.TF_STATE_REGION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ inputs.target_environment }}-${{ inputs.layer }}
+          path: infra/${{ inputs.layer }}/plan-${{ inputs.layer }}.txt
+          retention-days: 5
+
+  apply:
+    name: ${{ inputs.layer }} Apply
+    runs-on: ubuntu-latest
+    if: ${{ inputs.operation == 'apply' }}
+    environment: ${{ inputs.target_environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: ./.github/actions/terraform-layer
+        with:
+          layer: ${{ inputs.layer }}
+          var_file: ${{ inputs.var_file }}
+          target_environment: ${{ inputs.target_environment }}
+          operation: apply
+          aws_region: ${{ env.AWS_REGION }}
+          aws_role_arn: ${{ env.AWS_ROLE_ARN }}
+          tf_state_bucket: ${{ env.TF_STATE_BUCKET }}
+          tf_state_region: ${{ env.TF_STATE_REGION }}
+
+  destroy:
+    name: ${{ inputs.layer }} Destroy
+    runs-on: ubuntu-latest
+    if: ${{ inputs.operation == 'destroy' }}
+    environment: ${{ inputs.target_environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: ./.github/actions/terraform-layer
+        with:
+          layer: ${{ inputs.layer }}
+          var_file: ${{ inputs.var_file }}
+          target_environment: ${{ inputs.target_environment }}
+          operation: destroy
+          aws_region: ${{ env.AWS_REGION }}
+          aws_role_arn: ${{ env.AWS_ROLE_ARN }}
+          tf_state_bucket: ${{ env.TF_STATE_BUCKET }}
+          tf_state_region: ${{ env.TF_STATE_REGION }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: terraform-destroy-plan-${{ inputs.target_environment }}-${{ inputs.layer }}
+          path: infra/${{ inputs.layer }}/destroy-plan-${{ inputs.layer }}.txt
+          retention-days: 5

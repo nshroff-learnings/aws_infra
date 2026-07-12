@@ -52,7 +52,7 @@ resource "aws_kms_alias" "eks" {
 }
 
 resource "aws_eks_cluster" "this" {
-  #checkov:skip=CKV_AWS_39:Public endpoint access is enforced disabled by Terraform precondition from typed inputs.
+  #checkov:skip=CKV_AWS_39:Public endpoint access is configurable per environment; dev may enable it for local kubectl access.
   #checkov:skip=CKV_AWS_37:All EKS control plane log types are enforced by Terraform precondition from typed inputs.
   #checkov:skip=CKV_AWS_339:Supported Kubernetes versions are enforced by variable validation because version is input-driven.
   #checkov:skip=CKV_AWS_58:Secrets encryption is always configured using either a generated KMS key or caller-supplied kms_key_arn; Checkov cannot resolve the dynamic expression.
@@ -91,11 +91,6 @@ resource "aws_eks_cluster" "this" {
   tags = merge(local.tags, each.value.tags)
 
   lifecycle {
-    precondition {
-      condition     = each.value.endpoint_public_access == false
-      error_message = "EKS public endpoint access must be disabled."
-    }
-
     precondition {
       condition = length(setsubtract(
         toset(["api", "audit", "authenticator", "controllerManager", "scheduler"]),
@@ -170,3 +165,5 @@ resource "aws_eks_access_policy_association" "this" {
 
   depends_on = [aws_eks_access_entry.this]
 }
+
+
