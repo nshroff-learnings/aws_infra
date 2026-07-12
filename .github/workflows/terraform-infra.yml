@@ -7,6 +7,7 @@ on:
       - "variables/**"
       - ".github/workflows/terraform-infra.yml"
       - ".github/workflows/terraform-layer.yml"
+      - ".github/actions/**"
   push:
     branches:
       - main
@@ -15,6 +16,7 @@ on:
       - "variables/**"
       - ".github/workflows/terraform-infra.yml"
       - ".github/workflows/terraform-layer.yml"
+      - ".github/actions/**"
   workflow_dispatch:
     inputs:
       environment:
@@ -25,7 +27,7 @@ on:
         options:
           - dev
           - qa
-      action:
+      operation:
         description: "Run plan, plan plus apply, or destroy"
         type: choice
         required: true
@@ -58,61 +60,61 @@ concurrency:
 jobs:
   networking:
     name: Networking
-    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.action != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'networking')) }}
+    if: ${{ github.event_name != 'workflow_dispatch' || (inputs.operation != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'networking')) }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: networking
       var_file: networking.tfvars
       target_environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
-      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'plan' }}
+      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'plan' }}
 
   iam:
     name: IAM
     needs: networking
-    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.action != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'iam'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.networking.result == 'success') }}
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.operation != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'iam'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.operation != 'apply' || needs.networking.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: iam
       var_file: iam.tfvars
       target_environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
-      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'plan' }}
+      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'plan' }}
 
   config:
     name: Config
     needs: iam
-    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.action != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'config'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.iam.result == 'success') }}
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.operation != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'config'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.operation != 'apply' || needs.iam.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: config
       var_file: config.tfvars
       target_environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
-      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'plan' }}
+      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'plan' }}
 
   compute:
     name: Compute
     needs: config
-    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.action != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'compute'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.config.result == 'success') }}
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.operation != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'compute'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.operation != 'apply' || needs.config.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: compute
       var_file: eks.tfvars
       target_environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
-      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'plan' }}
+      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'plan' }}
 
   bootstrap:
     name: Bootstrap
     needs: compute
-    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.action != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'bootstrap'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.action != 'apply' || needs.compute.result == 'success') }}
+    if: ${{ always() && (github.event_name != 'workflow_dispatch' || (inputs.operation != 'destroy' && (inputs.layers == 'all' || inputs.layers == 'bootstrap'))) && (github.event_name != 'workflow_dispatch' || inputs.layers != 'all' || inputs.operation != 'apply' || needs.compute.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: bootstrap
       var_file: bootstrap.tfvars
       target_environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
-      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'plan' }}
+      operation: ${{ github.event_name == 'workflow_dispatch' && inputs.operation || 'plan' }}
 
   bootstrap_destroy:
     name: Bootstrap Destroy
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'bootstrap') }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'bootstrap') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: bootstrap
@@ -123,7 +125,7 @@ jobs:
   compute_destroy:
     name: Compute Destroy
     needs: bootstrap_destroy
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'compute') && (inputs.layers != 'all' || needs.bootstrap_destroy.result == 'success') }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'compute') && (inputs.layers != 'all' || needs.bootstrap_destroy.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: compute
@@ -134,7 +136,7 @@ jobs:
   config_destroy:
     name: Config Destroy
     needs: compute_destroy
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'config') && (inputs.layers != 'all' || needs.compute_destroy.result == 'success') }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'config') && (inputs.layers != 'all' || needs.compute_destroy.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: config
@@ -145,7 +147,7 @@ jobs:
   iam_destroy:
     name: IAM Destroy
     needs: config_destroy
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'iam') && (inputs.layers != 'all' || needs.config_destroy.result == 'success') }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'iam') && (inputs.layers != 'all' || needs.config_destroy.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: iam
@@ -156,10 +158,11 @@ jobs:
   networking_destroy:
     name: Networking Destroy
     needs: iam_destroy
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.action == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'networking') && (inputs.layers != 'all' || needs.iam_destroy.result == 'success') }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.operation == 'destroy' && (inputs.layers == 'all' || inputs.layers == 'networking') && (inputs.layers != 'all' || needs.iam_destroy.result == 'success') }}
     uses: ./.github/workflows/terraform-layer.yml
     with:
       layer: networking
       var_file: networking.tfvars
       target_environment: ${{ inputs.environment }}
       operation: destroy
+
