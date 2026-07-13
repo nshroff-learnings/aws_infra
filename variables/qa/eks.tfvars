@@ -21,11 +21,11 @@ eks_clusters = {
     node_groups = {
       system = {
         name            = "system"
-        instance_types  = ["t3.medium"]
+        instance_types  = ["t3.micro"]
         ami_type        = "AL2023_x86_64_STANDARD"
-        desired_size    = 2
-        min_size        = 2
-        max_size        = 4
+        desired_size    = 1
+        min_size        = 1
+        max_size        = 2
         max_unavailable = 1
         labels = {
           workload = "system"
@@ -34,4 +34,5 @@ eks_clusters = {
     }
   }
 }
+
 
