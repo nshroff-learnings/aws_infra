@@ -25,6 +25,14 @@ network_acls = {
         cidr_subnet_keys = ["private-01", "private-02"]
         from_port        = 0
         to_port          = 0
+      },
+      {
+        rule_no    = 200
+        action     = "allow"
+        protocol   = "tcp"
+        cidr_block = "0.0.0.0/0"
+        from_port  = 1024
+        to_port    = 65535
       }
     ]
     egress_rules = [
@@ -71,3 +79,5 @@ network_acls = {
     ]
   }
 }
+
+
