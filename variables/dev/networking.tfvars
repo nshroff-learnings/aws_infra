@@ -12,7 +12,7 @@ public_subnet_cidrs = [
   "10.10.102.0/24"
 ]
 
-map_public_ip_on_launch = false
+map_public_ip_on_launch = true
 
 network_acls = {
   private = {
@@ -79,5 +79,6 @@ network_acls = {
     ]
   }
 }
+
 
 
