@@ -2,13 +2,15 @@ locals {
   tags = merge(var.common_tags, var.tags)
 
   upstream_private_subnet_ids = data.terraform_remote_state.networking.outputs.private_subnet_ids
+  upstream_public_subnet_ids  = data.terraform_remote_state.networking.outputs.public_subnet_ids
+  upstream_subnet_ids         = merge(local.upstream_private_subnet_ids, local.upstream_public_subnet_ids)
   upstream_eks_roles          = data.terraform_remote_state.iam.outputs.eks_roles
 
   eks_clusters = {
     for cluster_key, cluster in var.eks_clusters : cluster_key => merge(cluster, {
       cluster_role_arn = cluster.cluster_role_arn != null ? cluster.cluster_role_arn : local.upstream_eks_roles[cluster.cluster_role_key].arn
       subnet_ids = cluster.subnet_ids != null ? cluster.subnet_ids : [
-        for subnet_key in cluster.subnet_keys : local.upstream_private_subnet_ids[subnet_key]
+        for subnet_key in cluster.subnet_keys : local.upstream_subnet_ids[subnet_key]
       ]
       access_entries = {
         for entry_key, entry in cluster.access_entries : entry_key => merge(entry, {
@@ -23,7 +25,7 @@ locals {
         for node_group_key, node_group in cluster.node_groups : node_group_key => merge(node_group, {
           node_role_arn = node_group.node_role_arn != null ? node_group.node_role_arn : local.upstream_eks_roles[node_group.node_role_key].arn
           subnet_ids = node_group.subnet_ids != null ? node_group.subnet_ids : [
-            for subnet_key in node_group.subnet_keys : local.upstream_private_subnet_ids[subnet_key]
+            for subnet_key in node_group.subnet_keys : local.upstream_subnet_ids[subnet_key]
           ]
         })
       }
@@ -58,5 +60,7 @@ locals {
     }
   ]...)
 }
+
+
 
 
