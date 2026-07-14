@@ -84,7 +84,7 @@ variable "eks_clusters" {
       ami_type           = optional(string, "AL2023_x86_64_STANDARD")
       capacity_type      = optional(string, "ON_DEMAND")
       disk_size          = optional(number, 50)
-      instance_types     = optional(list(string), ["t3.micro"])
+      instance_types     = optional(list(string), ["t3.small"])
       desired_size       = number
       min_size           = number
       max_size           = number
@@ -125,6 +125,7 @@ variable "eks_clusters" {
     error_message = "Each EKS cluster must use a Kubernetes version in current EKS standard support: 1.33, 1.34, 1.35, or 1.36."
   }
 }
+
 
 
 

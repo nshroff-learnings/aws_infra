@@ -33,7 +33,7 @@ eks_clusters = {
     node_groups = {
       system = {
         name            = "system"
-        instance_types  = ["t3.micro"]
+        instance_types  = ["t3.small"]
         ami_type        = "AL2023_x86_64_STANDARD"
         subnet_keys     = ["public-01", "public-02"]
         desired_size    = 1
@@ -47,6 +47,7 @@ eks_clusters = {
     }
   }
 }
+
 
 
 
